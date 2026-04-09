@@ -2,7 +2,7 @@
   <img src="assests/logo2.svg" alt="naukri-api-client" width="680"/>
 </p>
 
-# Nopri
+# Noperi
 
 A lightweight and Selenium-free Python API client for Naukri.com, designed to help you update your profile, upload your resume, and retrieve personalized job recommendations programmatically.
 
