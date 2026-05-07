@@ -232,7 +232,7 @@ class NaukriJobClient:
         if not sid:
             sid = datetime.utcnow().strftime("%Y%m%d%H%M%S") + "0000000"
 
-        url = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
+        url = f"https://www.naukri.com/jobapi/v1/job/{job_id}"
 
         params = {
             "microsite": "y",
@@ -274,6 +274,20 @@ class NaukriJobClient:
             return res.json()
         except Exception:
             raise NaukriParseError(f"Invalid JSON response: {res.text}")
+        
+    def is_list_type(q):
+        qtype = (q.get("questionType") or "").lower()
+        options = q.get("answerOption") or {}
+
+        # if multiple options exist → usually list expected
+        if len(options) > 1:
+            return True
+
+        # explicit type hints
+        if any(x in qtype for x in ["checkbox", "multi", "select"]):
+            return True
+
+        return False
 
     def apply_job(
         self,
@@ -372,6 +386,135 @@ class NaukriJobClient:
     
 
 
+    # def handle_static_questionnaire_and_apply(
+    #     self,
+    #     job,
+    #     questionnaire,
+    #     sid,
+    #     mandatory_skills=None,
+    #     optional_skills=None,
+    #     source="recommended"
+    # ):
+    #     import re
+
+    #     # 🔹 You can tweak these values anytime
+    #     PROFILE = {
+    #         "current_ctc": "5",
+    #         "expected_ctc": "7",
+    #         "default_exp": "2",
+    #         "notice_period": "30"
+    #     }
+
+
+
+       
+
+    #     def smart_answer(question, qtype, options):
+    #         q = question.lower()
+
+    #         # ---------------- TEXT BOX ----------------
+    #         if qtype == "Text Box":
+
+    #             if "current ctc" in q:
+    #                 return PROFILE["current_ctc"]
+
+    #             if "expected ctc" in q:
+    #                 return PROFILE["expected_ctc"]
+
+    #             if "experience" in q:
+    #                 if "node" in q:
+    #                     return "2"
+    #                 if "python" in q:
+    #                     return "1"
+    #                 return PROFILE["default_exp"]
+
+    #             if "notice" in q:
+    #                 return PROFILE["notice_period"]
+
+    #             return "1"  # safe fallback
+
+    #         # ---------------- RADIO BUTTON ----------------
+    #         if qtype == "Radio Button":
+    #             for key, val in options.items():
+    #                 val_lower = val.lower()
+
+    #                 if any(k in val_lower for k in ["yes", "willing", "open"]):
+    #                     return key
+
+    #             # fallback → first option
+    #             return list(options.keys())[0] if options else None
+            
+    #          # ---------------- RADIO BUTTON ----------------
+    #         # if qtype == "Radio Button":
+    #         #     for key, val in options.items():
+    #         #         if any(k in val.lower() for k in ["yes", "willing", "open"]):
+    #         #             return key
+    #         #     return list(options.keys())[0] if options else None
+
+    #         # ---------------- CHECKBOX / MULTI ----------------
+    #         if qtype in ["CheckBox", "Multi Select", "Dropdown"]:
+    #             # pick first option as list
+    #             if options:
+    #                 return [list(options.keys())[0]]
+
+    #         return None
+
+    #     # ---------------- BUILD ANSWERS ----------------
+    #     answers = {}
+
+    #     for q in questionnaire:
+    #         qid = q.get("questionId")
+    #         qtext = q.get("questionName") or ""
+    #         qtype = q.get("questionType")
+    #         options = q.get("answerOption") or {}
+
+    #         ans = smart_answer(qtext, qtype, options)
+
+    #         if ans is not None:
+    #             answers[qid] = ans
+
+    #     logger.debug("Generated answers: %s", answers)
+
+    #     # ---------------- FINAL APPLY ----------------
+    #     apply_src, logstr_template = APPLY_SRC_MAP.get(source, APPLY_SRC_MAP["recommended"])
+    #     logstr = logstr_template.format(sid=sid)
+
+    #     payload = {
+    #         "strJobsarr": [job.job_id],
+    #         "logstr": logstr,
+    #         "flowtype": "show",
+    #         "crossdomain": True,
+    #         "jquery": 1,
+    #         "rdxMsgId": "",
+    #         "chatBotSDK": True,
+    #         "mandatory_skills": mandatory_skills or [],
+    #         "optional_skills": optional_skills or [],
+    #         "applyTypeId": "107",
+    #         "closebtn": "y",
+    #         "applySrc": apply_src,
+    #         "sid": sid,
+    #         "mid": "",
+    #         "applyData": {
+    #             job.job_id: {
+    #                 "answers": answers
+    #             }
+    #         }
+    #     }
+
+    #     headers = self._client._build_headers(auth=True)
+    #     res = self._session.post(APPLY_JOB_URL, headers=headers, json=payload)
+
+    #     if not res.ok:
+    #         logger.debug("Apply failed: %s", res.text)
+    #         return {"success": False, "error": res.text}
+
+    #     try:
+    #         return res.json()
+    #     except Exception:
+    #         return {"success": False, "error": "Invalid JSON response"}
+    
+
+
     def handle_static_questionnaire_and_apply(
         self,
         job,
@@ -381,70 +524,109 @@ class NaukriJobClient:
         optional_skills=None,
         source="recommended"
     ):
-        import re
-
-        # 🔹 You can tweak these values anytime
+        # ---------------- PROFILE ----------------
         PROFILE = {
             "current_ctc": "5",
             "expected_ctc": "7",
-            "default_exp": "2",
-            "notice_period": "30"
+
+            "exp_total": "2",
+            "exp_node": "2",
+            "exp_python": "1",
+
+            "notice_days": 30,
+
+            "skills": [
+                "node", "docker", "kubernetes",
+                "aws", "ci/cd", "jenkins", "terraform"
+            ]
         }
 
-        def smart_answer(question, qtype, options):
-            q = question.lower()
+        # ---------------- SMART ENGINE ----------------
+        def build_smart_answers(questionnaire, profile):
+            answers = {}
 
-            # ---------------- TEXT BOX ----------------
-            if qtype == "Text Box":
+            def pick_yes(options):
+                for k, v in options.items():
+                    if "yes" in v.lower():
+                        return k
+                return list(options.keys())[0]
 
-                if "current ctc" in q:
-                    return PROFILE["current_ctc"]
+            def pick_notice(options, notice_days):
+                for k, v in options.items():
+                    val = v.lower()
 
-                if "expected ctc" in q:
-                    return PROFILE["expected_ctc"]
+                    if "15" in val and notice_days <= 15:
+                        return k
+                    if "1 month" in val and notice_days <= 30:
+                        return k
+                    if "2 month" in val and notice_days <= 60:
+                        return k
 
-                if "experience" in q:
-                    if "node" in q:
-                        return "2"
-                    if "python" in q:
-                        return "1"
-                    return PROFILE["default_exp"]
+                return list(options.keys())[0]
 
-                if "notice" in q:
-                    return PROFILE["notice_period"]
+            for q in questionnaire:
+                qid = q["questionId"]
+                qtext = (q.get("questionName") or "").lower()
+                qtype = (q.get("questionType") or "").lower()
+                options = q.get("answerOption") or {}
 
-                return "1"  # safe fallback
+                # ---------------- TEXT ----------------
+                if qtype == "text box":
+                    if "current ctc" in qtext:
+                        ans = profile["current_ctc"]
 
-            # ---------------- RADIO BUTTON ----------------
-            if qtype == "Radio Button":
-                for key, val in options.items():
-                    val_lower = val.lower()
+                    elif "expected ctc" in qtext:
+                        ans = profile["expected_ctc"]
 
-                    if any(k in val_lower for k in ["yes", "willing", "open"]):
-                        return key
+                    elif "experience" in qtext:
+                        if "node" in qtext:
+                            ans = profile["exp_node"]
+                        elif "python" in qtext:
+                            ans = profile["exp_python"]
+                        else:
+                            ans = profile["exp_total"]
 
-                # fallback → first option
-                return list(options.keys())[0] if options else None
+                    elif "notice" in qtext:
+                        ans = str(profile["notice_days"])
 
-            return None
+                    else:
+                        ans = "1"
+
+                # ---------------- OPTIONS ----------------
+                else:
+                    if options:
+
+                        # NOTICE PERIOD
+                        if "notice" in qtext:
+                            key = pick_notice(options, profile["notice_days"])
+
+                        # SKILL MATCH
+                        elif any(skill in qtext for skill in profile["skills"]):
+                            key = pick_yes(options)
+
+                        # GENERIC YES/NO
+                        elif any(x in qtext for x in ["do you", "have you", "experience"]):
+                            key = pick_yes(options)
+
+                        else:
+                            key = list(options.keys())[0]
+
+                        # 🔥 CRITICAL FIX → ALWAYS LIST
+                        ans = [key]
+
+                    else:
+                        ans = "1"
+
+                answers[qid] = ans
+
+            return answers
 
         # ---------------- BUILD ANSWERS ----------------
-        answers = {}
-
-        for q in questionnaire:
-            qid = q.get("questionId")
-            qtext = q.get("questionName") or ""
-            qtype = q.get("questionType")
-            options = q.get("answerOption") or {}
-
-            ans = smart_answer(qtext, qtype, options)
-
-            if ans is not None:
-                answers[qid] = ans
+        answers = build_smart_answers(questionnaire, PROFILE)
 
         logger.debug("Generated answers: %s", answers)
 
-        # ---------------- FINAL APPLY ----------------
+        # ---------------- APPLY ----------------
         apply_src, logstr_template = APPLY_SRC_MAP.get(source, APPLY_SRC_MAP["recommended"])
         logstr = logstr_template.format(sid=sid)
 
@@ -471,6 +653,7 @@ class NaukriJobClient:
         }
 
         headers = self._client._build_headers(auth=True)
+
         res = self._session.post(APPLY_JOB_URL, headers=headers, json=payload)
 
         if not res.ok:
@@ -481,7 +664,6 @@ class NaukriJobClient:
             return res.json()
         except Exception:
             return {"success": False, "error": "Invalid JSON response"}
-    
 
 
     def search_jobs(
