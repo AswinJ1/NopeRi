@@ -25,8 +25,9 @@ A lightweight and Selenium-free Python API client for Naukri.com, designed to he
 | Job search (`/jobapi/v3/search`) | ✅ Working |
 | Job details  (`jobapi/v1/job/`) | ✅ Working |
 | One-click job apply | ✅ Working |
+| Job questionnaire while applying| ✅ Working Partially (harcoded answer) |
 | OTP login/MFA | 🚧 Under development |
-| Job questionnaire while applying| 🚧 Under development |
+
 
 > **Updated on April 13 2026**  
 > **No Selenium required** for core features.  
