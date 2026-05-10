@@ -473,11 +473,88 @@ class NaukriLoginClient:
         payload = {"profile": profile_fields, "profileId": pid}
         res = self._update_profile_request(headers, payload)
         return ProfileUpdateResult(pid, res.json(), res.status_code)
+    
+
+
+       
+
+    @with_exponential_retry(label="fetch_history")
+    def _fetch_history_request(self, page_size, days, page_number, mobile=False):
+        headers = {
+            "accept": "application/json",
+            "appid": "135" if mobile else "107",
+            "systemid": "135" if mobile else "107",
+            "content-type": "application/json",
+            "x-requested-with": "XMLHttpRequest",
+            "referer": "https://www.naukri.com/apply/historypage" if mobile else "https://www.naukri.com/myapply/historypage",
+            "authorization": f"Bearer {self.naukri_session.bearer_token}",
+        }
+        if mobile:
+            headers["clientid"] = "m0b5"
+
+        params = {
+            "pageSize": page_size,
+            "days": days,
+            "pageNumber": page_number,
+        }
+        if not mobile:
+            params["filterInfo"] = 2
+
+        return self.session.get(HISTORY_URL, headers=headers, params=params)
+
+    def get_application_history(self, page_size=10, days=90, page_number=1, mobile=False):
+        """
+        Fetch job application history.
+        
+        Args:
+            page_size:    Number of results per page (default 10)
+            days:         How far back to look (default 90)
+            page_number:  Page number (default 1)
+            mobile:       Use mobile headers (default False)
+        """
+        if not self.naukri_session:
+            raise NaukriAuthError("Login first")
+
+        res = self._fetch_history_request(page_size, days, page_number, mobile)
+
+        if not res.ok:
+            raise NaukriParseError(f"Failed to fetch history: {res.status_code}")
+
+        return res.json()
 
     # ------------------------------------------------------------------
     # Utilities
     # ------------------------------------------------------------------
-
+    
     def generate_file_key(self, length):
         chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         return "".join(random.choice(chars) for _ in range(length))
+    
+
+    def parse_history(self, raw: dict) -> list[ApplicationHistory]:
+        results = []
+        for item in raw.get("applyDetails", []):
+            statuses = [
+                ApplicationStatus(
+                    status_id=s["statusId"],
+                    status_value=s["statusValue"],
+                    date_time=s["dateTime"],
+                )
+                for s in item.get("status", [])
+            ]
+            rating = item.get("companyRating", {})
+            results.append(ApplicationHistory(
+                job_id=item["jobId"],
+                job_title=item["jobTitle"],
+                company=item["company"],
+                location=item["location"],
+                apply_type=item["applyType"],
+                is_open=item["isOpen"] == "true",
+                ars_score=item.get("arsScore", 0),
+                star_rating=item.get("starRating", "0"),
+                job_type=item.get("jobType", ""),
+                statuses=statuses,
+                company_rating=float(rating["AggregateRating"]) if rating else None,
+                logo_path=item.get("logoPath"),
+            ))
+        return results
