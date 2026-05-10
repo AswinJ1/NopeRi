@@ -41,3 +41,25 @@ class ProfileUpdateResult:
     profile_id: str
     response: Dict[str, Any]
     status_code: int
+
+
+@dataclass
+class ApplicationStatus:
+    status_id: int
+    status_value: str
+    date_time: str
+
+@dataclass
+class ApplicationHistory:
+    job_id: str
+    job_title: str
+    company: str
+    location: str
+    apply_type: str
+    is_open: bool
+    ars_score: int
+    star_rating: str
+    job_type: str
+    statuses: list[ApplicationStatus]
+    company_rating: float = None
+    logo_path: str = None
