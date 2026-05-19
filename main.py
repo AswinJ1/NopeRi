@@ -14,8 +14,8 @@ if __name__ == "__main__":
     # Load credentials from .env file
     # (NAUKRI_USERNAME and NAUKRI_PASSWORD must be set)
     # ---------------------------------------------------------------
-    username = os.getenv("USERNAME")
-    password = os.getenv("PASSWORD")
+    username = os.getenv("NAUKRI_USERNAME")
+    password = os.getenv("NAUKRI_PASSWORD")
 
     # ---------------------------------------------------------------
     # 1. Login — authenticates and stores session + bearer token
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     
     print("Searching jobs...")    
-    jobs = jc.search_jobs(keyword="Node.js developer", location="Hyderabad", experience=2)
+    jobs = jc.search_jobs(keyword="Full Stack Developer", location="Chennai", experience=1)
 
     if not jobs:
         print(f"{Fore.YELLOW}  No jobs found.{Style.RESET_ALL}")

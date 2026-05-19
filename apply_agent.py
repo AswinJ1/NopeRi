@@ -307,8 +307,8 @@ def fetch_all_jobs(jc: NaukriJobClient) -> list:
 
 if __name__ == "__main__":
 
-    username = os.getenv("USERNAME")
-    password = os.getenv("PASSWORD")
+    username = os.getenv("NAUKRI_USERNAME")
+    password = os.getenv("NAUKRI_PASSWORD")
     ai_key   = os.getenv("OPEN_API_KEY")
 
     # Step 1: authenticate and establish session.
@@ -328,7 +328,15 @@ if __name__ == "__main__":
     # Step 3: run AI filter pipeline. Jobs are scored and ranked. Only those
     # above the pipeline's threshold are passed to the apply loop.
     print_section_title("running AI filter pipeline")
-    pipeline   = JobFilterPipeline2(openai_api_key=ai_key)
+    
+    # Base stack from the resume
+    RESUME_STACK = [
+        "typescript", "javascript", "python", "sql", "nextjs", "nestjs",
+        "git", "github", "docker", "ci/cd", "github actions", "prisma", 
+        "supabase", "azure", "postgresql", "neon"
+    ]
+    
+    pipeline   = JobFilterPipeline2(openai_api_key=ai_key, my_stack=RESUME_STACK)
     final_jobs = pipeline.run(jobs)
 
     # Build a lookup from job_id to the pipeline result dict (score, ai_detail, etc.)

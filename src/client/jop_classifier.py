@@ -105,6 +105,7 @@ class JobFilterPipeline2:
         min_apply_score=50,
         ai_score_limit=300,
         batch_size=50,
+        my_stack=None,
     ):
         self.api_key           = openai_api_key
         self.url               = "https://api.openai.com/v1/chat/completions"
@@ -114,6 +115,8 @@ class JobFilterPipeline2:
         self.ai_score_limit    = ai_score_limit
         self.batch_size        = batch_size
         self.cache             = self._load_cache()
+        if my_stack is not None:
+            self.MY_STACK = my_stack
 
     # =========================================================
     # MAIN
